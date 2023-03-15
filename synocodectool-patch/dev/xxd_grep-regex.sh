@@ -26,9 +26,10 @@ script_log="$script_dir/$script_name.log"
 log_path=""
 opmode="help"
 dbg_m=0
-exit_val=0
+exit_val=100
 
 bin_file="synocodectool"
+info_file="INFO"
 declare -a binpath_list=()
 declare -a package_check_list=()
 
@@ -43,9 +44,10 @@ source "$script_dir/patche_declares"
 print_usage() { 
 printf "
 SYNOPSIS
-    xxd_grep-regex.sh [-g|-h|-l|-p]
+    xxd_grep-regex.sh [-e|-g|-h|-l|-p]
 DESCRIPTION
     check \"synocodectool\" since DSM 7+
+        -e      extended check synocodectool
         -g      check synocodectool
         -h      print this help message
         -l      list known DSM versions
@@ -53,13 +55,37 @@ DESCRIPTION
 "
 }
 
-check_version () {
-    local ver="$1"
+list_versions () {
+    if ! (( ${#versions_list[@]} )); then
+        echo "could not find versions_list" | tee -a $log_path
+        exit 1
+    fi
 
+    echo "known DSM versions"
+    for i in "${versions_list[@]}"; do
+        echo "$i"
+    done
+}
+
+list_packages () {
+    if ! (( ${#packages_list[@]} )); then
+        echo "could not find packages_list" | tee -a $log_path
+        exit 1
+    fi
+
+    echo "known packages"
+    for i in "${packages_list[@]}"; do
+        echo "$i"
+    done
+}
+
+check_version () {
     echo "FUNCTION: ${FUNCNAME[*]}" >&2
 
+    local ver="$1"
+
     if ! (( ${#versions_list[@]} )); then
-        echo "Something went wrong. Could not find versions_list" | tee -a $log_path
+        echo "could not find versions_list" | tee -a $log_path
         return 1
     fi
 
@@ -72,31 +98,15 @@ check_version () {
     return 1
 }
 
-list_versions () {
-    for i in "${versions_list[@]}"; do
-        echo "$i"
-    done
-
-    return 0
-}
-
-list_packages () {
-    for i in "${packages_list[@]}"; do
-        echo "$i"
-    done
-
-    return 0
-}
-
 create_binpath_list () {
     echo "FUNCTION: ${FUNCNAME[*]}" >&2
 
-    if ! (( ${#path_list_f[@]} )); then
-        echo "could not find path_list_f" | tee -a $log_path
+    if ! (( ${#dir_list_f[@]} )); then
+        echo "could not find dir_list_f" | tee -a $log_path
         return 1
     fi
 
-    for i in "${path_list_f[@]}"; do
+    for i in "${dir_list_f[@]}"; do
         local var1=""
         local var2=""
         local var3=""
@@ -104,11 +114,19 @@ create_binpath_list () {
         #local -a dir_list_2=()
         
         if [[ "$i" =~ \%d && "$i" =~ \%s ]]; then
-            echo "path_list_f entry contain %d and %s"
-            echo "i: $i"
-            var1=$(echo $i | grep -o '^[^%d]*') # "delete" substring from '%d'
-            echo "var1: $var1"
+            #echo "dir_list_f entry contain %d and %s"
+            #echo "i: $i"
 
+            # https://superuser.com/questions/1001973/bash-find-string-index-position-of-substring
+            # https://stackoverflow.com/questions/19482123/extract-part-of-a-string-using-bash-cut-split
+
+            # https://stackoverflow.com/questions/13570327/how-to-delete-a-substring-using-shell-script
+            var1=$(echo $i | grep -o '^[^%d]*') # "delete" substring from '%d'
+            #echo "var1: $var1"
+
+            # https://stackoverflow.com/questions/14352290/listing-only-directories-using-ls-in-bash
+            # https://stackoverflow.com/questions/21792385/how-to-use-ls-to-list-out-files-that-end-in-numbers
+            # https://stackoverflow.com/questions/46154279/how-can-i-split-the-string-output-of-an-ls-command-into-an-array-on-just-the-fil
             dir_list_1=($(ls -d "$var1"{1..12} 2>/dev/null))
             echo "dir_list_1: ${dir_list_1[@]}"
 
@@ -121,35 +139,28 @@ create_binpath_list () {
                     
 
                     for k in "${packages_list[@]}"; do
-                        var3="${var1/\%s/$k}" # replace substring "var2" with "j" in string "i"
-                        echo "directory to test: $var3"
+                        var3="${var1/\%s/$k}" # replace substring
+                        #echo "directory to test: $var3"
 
                         if [ -f "$var3/$bin_file" ]; then
                             binpath_list+=( "$var3/$bin_file" )
                             echo "added binpath entry: $var3/$bin_file" | tee -a $log_path
                         fi
                     done
-
-continue
-                    if [ -f "$var1/$bin_file" ]; then
-                        binpath_list+=( "$var1/$bin_file" )
-                        echo "added binpath entry: $var1/$bin_file" | tee -a $log_path
-                    fi
                 done
             fi
 
         elif [[ "$i" =~ \%d ]]; then
-            echo "path_list_f entry contain %d"
+            echo "dir_list_f entry contain %d"
             echo "i: $i"
 
         elif [[ "$i" =~ \%s ]]; then
-            echo "path_list_f entry contain %s"
+            echo "dir_list_f entry contain %s"
             echo "i: $i"
 
         elif [[ -f "$i/$bin_file" ]]; then
-            echo "path_list_f entry is absolut"
-            echo "i: $i"
-            continue
+            #echo "dir_list_f entry is absolut"
+            #echo "i: $i"
 
             binpath_list+=( "$i/$bin_file" )
             echo "added binpath entry: $i/$bin_file" | tee -a $log_path
@@ -159,29 +170,68 @@ continue
     return 1
 }
 
-convert_path () {
-    local path="$1"
+get_pack_info () {
     echo "FUNCTION: ${FUNCNAME[*]}" >&2
 
-    return 1
-}
+    local ret_val=100
 
-get_pack_info () {
     # https://serverfault.com/questions/219306/control-a-bash-script-with-variables-from-an-external-file
 
-    local pack_dir="$1"
-    local pack_name="$2"
+    #local pack_dir="$1"
+    #local pack_name="$2"
     local pack_path=""
     local pack_info=""
 
     #pack_info=/var/packages/CodecPack/INFO
-    # https://phoenixnap.com/kb/bash-printf
-    printf -v pack_path "/var/packages/%s" $pack_name
-    pack_info="$pack_path/INFO"
+    
+    #pack_info="$pack_path/INFO"
 
 
-    # Load config values
-    source $pack_info
+    if ! (( ${#dir_list_f[@]} )); then
+        echo "could not find dir_list_f" | tee -a $log_path
+        return 1
+    fi
+
+    for i in "${dir_list_f[@]}"; do
+        local var1=""
+        local var2=""
+        local var3=""
+        local -a dir_list_1=()
+        
+        if [[ "$i" =~ \%d ]]; then
+            continue
+
+        elif [[ "$i" =~ packages && "$i" =~ \%s ]]; then
+            #echo "dir_list_f entry contain %d and %s"
+            echo "i: $i"
+
+            for k in "${packages_list[@]}"; do
+                # https://phoenixnap.com/kb/bash-printf
+                #printf -v var1 "$i" $k # print f-string to var1
+
+                var1="${i/\%s/$k}" # replace substring "%s" with "k" in string "i"
+                echo "directory to test: $var1"
+
+                if [ -f "$var1/$info_file" ]; then
+                    # load info values
+                    source $pack_info
+
+                    echo "$package $version $arch $os_min_ver $toolkit_version $create_time"
+
+                    # unload info values
+                    #...
+                fi
+
+                # /var/packages/CodecPack/target/bin
+                if [ -f "$var1/target/bin/$bin_file" ]; then
+                    get_offsets "$var1/target/bin/$bin_file" || ret_val=$?
+                    ret_val=$?
+                fi
+            done
+        fi
+    done
+
+    return 0
 
 
     #cat $pack_info | while read -a HR ; do
@@ -199,6 +249,8 @@ get_pack_info () {
 }
 
 misc_dummy () {
+    echo "FUNCTION: ${FUNCNAME[*]}" >&2
+
     echo "script_name: $script_name"
     echo "script_dir: $script_dir"
 
@@ -219,12 +271,12 @@ misc_dummy () {
 }
 
 get_offsets () {
+    echo "FUNCTION: ${FUNCNAME[*]}" >&2
+
     local bin_path="$1"
     local synocodectool_hash="$(sha1sum "$bin_path" | cut -f1 -d\ )"
     local ret_last=$?
     local res_tmp=""
-
-    echo "FUNCTION: ${FUNCNAME[*]}" >&2
 
     if [[ ! "$ret_last" == 0 ]]; then
         if [[ -z $synocodectool_hash ]]; then
@@ -289,12 +341,67 @@ get_offsets () {
 	return 1
 }
 
+check_ext () {
+    echo "FUNCTION: ${FUNCNAME[*]}" >&2
+
+    local is_ext="$1"
+    local ret_val=100
+
+
+    dsm_version="$productversion-$buildnumber-$smallfixnumber"
+    if [[ -z $dsm_version ]] ; then
+        echo "could not fetch dsm_version" | tee -a $script_log
+        return 1
+    fi
+
+    log_path="$script_dir/$dsm_version.log"
+
+    if ! check_version $dsm_version; then
+        echo "dsm_version unknown: $dsm_version" | tee -a $log_path
+    else
+        echo "dsm_version: $dsm_version" | tee -a $log_path
+    fi
+
+    # is extended chek
+    if [[ "$is_ext" == 1 ]]; then
+        get_pack_info
+        ret_val=$?
+
+        return $ret_val
+    fi
+
+    # is native chek
+    create_binpath_list
+    ret_val=$?
+
+    if  ! (( ${#binpath_list[@]} )); then
+        echo "could not find $bin_file" | tee -a $log_path
+        return 1
+    fi
+
+    for path in "${binpath_list[@]}"; do
+
+        get_offsets "${path}" || ret_val=$?
+        ret_val=$?
+        
+        case "$ret_val" in
+            0) echo "successfull" | tee -a $log_path;;
+            1) echo "breaked" | tee -a $log_path;;
+            2) echo "canceled" | tee -a $log_path;;
+            *) echo "unknown state, ret_val: $ret_val" | tee -a $log_path;;
+        esac
+    done
+
+    return $ret_val
+}
+
 
 #main
 echo "$script_name started, $(date)" | tee -a $script_log
 
-while getopts "ghl" flag; do
+while getopts e:g:h:l:p flag; do
     case "${flag}" in
+        e) opmode="checkext";;
         g) opmode="check";;
         h) opmode="${opmode}";;
         l) opmode="listversions";;
@@ -304,100 +411,13 @@ while getopts "ghl" flag; do
 done
 
 case "${opmode}" in
-    check) echo;; #check;;
-    help) print_usage; exit 2;;
-    listversions) list_versions;;
-    listpackages) list_packages;;
+    checkext) echo;; #check_ext "1";;
+    check) check_ext "0"; exit_val=$?;;
+    help) print_usage; exit_val=2;;
+    listversions) list_versions; exit_val=2;;
+    listpackages) list_packages; exit_val=2;;
     *) echo "Incorrect combination of flags. Use option -h to get help."; exit 2;;
 esac
 
-dsm_version="$productversion-$buildnumber-$smallfixnumber"
-if [[ ! "$dsm_version" ]] ; then
-    echo "Something went wrong. Could not fetch dsm_version" | tee -a $script_log
-    exit 1
-fi
-
-log_path="$script_dir/$dsm_version.log"
-
-if ! check_version $dsm_version; then
-    echo "dsm_version unknown: $dsm_version" | tee -a $log_path
-else
-    echo "dsm_version: $dsm_version" | tee -a $log_path
-fi
-
-create_binpath_list
-exit 2
-
-if ! (( ${#path_list[@]} )); then
-    echo "Something went wrong. Could not find path_list" | tee -a $log_path
-    exit 1
-fi
-
-for i in "${path_list[@]}"; do
-#    convert_path "${i}"
-
-    var1=$(echo "$i" | grep '#/') # looking for '#/'
-    #echo "path_list entry: $var1"
-
-    if [[ ! -z $var1 ]]; then
-        # https://superuser.com/questions/1001973/bash-find-string-index-position-of-substring
-        # https://stackoverflow.com/questions/19482123/extract-part-of-a-string-using-bash-cut-split
-
-        # https://stackoverflow.com/questions/13570327/how-to-delete-a-substring-using-shell-script
-        var1=$(echo $i | grep -o '^[^#]*') # "delete" substring from '#'
-        #var2="$var1*" # add regex char '*'
-
-        # https://stackoverflow.com/questions/14352290/listing-only-directories-using-ls-in-bash
-        # https://stackoverflow.com/questions/21792385/how-to-use-ls-to-list-out-files-that-end-in-numbers
-        # https://stackoverflow.com/questions/46154279/how-can-i-split-the-string-output-of-an-ls-command-into-an-array-on-just-the-fil
-        #declare -a tmp_list=()
-        #tmp_list=($(ls -d $var2))
-        #tmp_list=($(ls -d "$var1"{1..12}))
-        tmp_list=($(ls -d "$var1"{1..12} 2>/dev/null))
-
-        var2="$var1#" # add char '#'
-        if (( ${#tmp_list[@]} )); then
-            for j in "${tmp_list[@]}"; do
-                #echo "tmp_list entry: $j"
-                # https://stackoverflow.com/questions/13210880/replace-one-substring-for-another-string-in-shell-script
-                var1="${i/$var2/$j}" # replace substring "var2" with "j" in string "i"
-                #echo "directory to test: $var1"
-
-                if [ -f "$var1/$bin_file" ]; then
-                    binpath_list+=( "$var1/$bin_file" )
-                    echo "added binpath entry: $var1/$bin_file" | tee -a $log_path
-                fi
-            done
-        fi
-    elif [[ -f "$i/$bin_file" ]]; then
-        binpath_list+=( "$i/$bin_file" )
-        echo "added binpath entry: $i/$bin_file" | tee -a $log_path
-    fi
-done
-
-if  ! (( ${#binpath_list[@]} )); then
-    echo "Something went wrong. Could not find $bin_file" | tee -a $log_path
-    exit 1
-fi
-
-for path in "${binpath_list[@]}"; do
-    ret_tmp=0
-
-    get_offsets "${path}" || ret_tmp=$?
-    ret_tmp=$?
-    
-	case "$ret_tmp" in
-        0) echo "successfull" | tee -a $log_path;;
-        1) echo "breaked" | tee -a $log_path;;
-        2) echo "canceled" | tee -a $log_path;;
-        *) echo "unknown state, ret_tmp: $ret_tmp" | tee -a $log_path; exit 2;;
-    esac
-	
-	if [[ "$exit_val" -lt "$ret_tmp" ]]; then
-		exit_val=$ret_tmp
-		echo "exit_val: $exit_val"
-	fi
-done
-
-echo "$script_name done, $(date)" | tee -a $script_log
+echo "$script_name exit with \"$exit_val\", $(date)" | tee -a $script_log
 exit $exit_val

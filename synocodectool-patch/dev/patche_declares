@@ -23,7 +23,7 @@ declare -a path_list=(
     "/volume#/@appstore/CodecPack/bin" \
     "/volume#/@appstore/AudioStation/bin"
 )
-declare -a path_list_f=(
+declare -a dir_list_f=(
     "/usr/syno/bin" \
     "/volume%d/@appstore/%s/bin" \
     "/var/packages/%s"
