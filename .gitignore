@@ -3,6 +3,10 @@
 test.sh
 .nvram
 
+## Visual Studio
+.vs/
+.vscode/ 
+
 # Prerequisites
 
 # Object files
