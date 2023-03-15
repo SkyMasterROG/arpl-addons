@@ -1,0 +1,6 @@
+#
+# git ignore file
+#
+# v0.10
+
+*.dev.*

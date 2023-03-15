@@ -1,0 +1,12 @@
+[Unit]
+Description=Patch synocodectool, by xbl3
+Documentation=https://github.com/xbl3/synocodectool-patch
+After=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/codecpatch.sh
+
+[Install]
+WantedBy=multi-user.target
