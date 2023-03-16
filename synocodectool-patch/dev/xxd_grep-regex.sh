@@ -208,15 +208,14 @@ get_pack_info () {
             for k in "${packages_list[@]}"; do
                 # https://phoenixnap.com/kb/bash-printf
                 #printf -v var1 "$i" $k # print f-string to var1
-
                 var1="${i/\%s/$k}" # replace substring "%s" with "k" in string "i"
                 echo "directory to test: $var1"
 
                 if [ -f "$var1/$info_file" ]; then
                     # load info values
-                    source $pack_info
+                    source $var1/$info_file
 
-                    echo "$package $version $arch $os_min_ver $toolkit_version $create_time"
+                    echo "info_file: $package $version $arch $os_min_ver $toolkit_version $create_time"
 
                     # unload info values
                     #...
@@ -274,11 +273,14 @@ get_offsets () {
     echo "FUNCTION: ${FUNCNAME[*]}" >&2
 
     local bin_path="$1"
-    local synocodectool_hash="$(sha1sum "$bin_path" | cut -f1 -d\ )"
-    local ret_last=$?
+    local ret_last=100
     local res_tmp=""
 
-    if [[ ! "$ret_last" == 0 ]]; then
+    local synocodectool_hash="$(sha1sum "$bin_path" | cut -f1 -d\ )"
+    ret_last=$?
+    echo "ret_last: $ret_last"
+
+    #if [[ ! "$ret_last" == 0 ]]; then
         if [[ -z $synocodectool_hash ]]; then
             echo "sha1sum || cut return: $ret_last" | tee -a $log_path
 
@@ -289,9 +291,9 @@ get_offsets () {
             return $ret_last
         fi
 
-        echo "bin_path fail: $bin_path, hash: $synocodectool_hash" | tee -a $log_path
-        return 2
-    fi
+        #echo "bin_path fail: $bin_path, hash: $synocodectool_hash" | tee -a $log_path
+        #return 2
+    #fi
 
     
     echo "bin_path: $bin_path, hash: $synocodectool_hash" | tee -a $log_path
@@ -309,12 +311,12 @@ get_offsets () {
             res_tmp=$(xxd -u -g 16 $bin_path | grep --basic-regexp $pattern)
             ret_last=$?
             #echo "xxd .. grep .. result: $ret_last"
-            echo "xxd .. grep .. result: $res_tmp" | tee -a $log_path
+            echo "result: $res_tmp" | tee -a $log_path
         done
 
         #return 0
         return $ret_last
-    else
+    elif [[ ! -z $synocodectool_hash ]]; then
         echo "Detected unknown synocodectool. Try binhash_pattern_list.." | tee -a $log_path
         
         echo "$bin_path hash sha1sum: $synocodectool_hash" | tee -a $log_path
@@ -357,13 +359,15 @@ check_ext () {
     log_path="$script_dir/$dsm_version.log"
 
     if ! check_version $dsm_version; then
-        echo "dsm_version unknown: $dsm_version" | tee -a $log_path
+        echo "dsm_version unknown: $dsm_version, builddate $builddate" | tee -a $log_path
     else
-        echo "dsm_version: $dsm_version" | tee -a $log_path
+        echo "dsm_version: $dsm_version, builddate $builddate" | tee -a $log_path
     fi
 
     # is extended chek
+    #echo "is_ext: $is_ext"
     if [[ "$is_ext" == 1 ]]; then
+        echo "extended chek"
         get_pack_info
         ret_val=$?
 
@@ -371,6 +375,7 @@ check_ext () {
     fi
 
     # is native chek
+    echo "native chek"
     create_binpath_list
     ret_val=$?
 
@@ -399,20 +404,20 @@ check_ext () {
 #main
 echo "$script_name started, $(date)" | tee -a $script_log
 
-while getopts e:g:h:l:p flag; do
+while getopts eghlp flag; do
     case "${flag}" in
         e) opmode="checkext";;
         g) opmode="check";;
         h) opmode="${opmode}";;
         l) opmode="listversions";;
         p) opmode="listpackages";;
-        *) opmode="check"; echo "opmode set to $opmode";;
+        *) opmode="help"; echo "opmode set to $opmode";;
     esac
 done
 
 case "${opmode}" in
-    checkext) echo;; #check_ext "1";;
-    check) check_ext "0"; exit_val=$?;;
+    checkext) check_ext 1;;
+    check) check_ext 0; exit_val=$?;;
     help) print_usage; exit_val=2;;
     listversions) list_versions; exit_val=2;;
     listpackages) list_packages; exit_val=2;;
