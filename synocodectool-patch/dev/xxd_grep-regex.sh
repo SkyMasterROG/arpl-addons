@@ -211,7 +211,13 @@ get_pack_info () {
                 var1="${i/\%s/$k}" # replace substring "%s" with "k" in string "i"
                 echo "directory to test: $var1"
 
+                # https://www.cyberciti.biz/faq/get-octal-file-permissions-from-command-line-on-linuxunix/
+                #stat -c '%a' /etc/passwd
+
                 if [ -f "$var1/$info_file" ]; then
+                    var2=$(stat -c '%a' $var1/$info_file)
+                    echo "var2: $var2"
+
                     # load info values
                     source $var1/$info_file
 
@@ -223,6 +229,9 @@ get_pack_info () {
 
                 # /var/packages/CodecPack/target/bin
                 if [ -f "$var1/target/bin/$bin_file" ]; then
+                    var2=$(stat -c '%a' $var1/target/bin/$bin_file)
+                    echo "var2: $var2"
+
                     get_offsets "$var1/target/bin/$bin_file" || ret_val=$?
                     ret_val=$?
                 fi

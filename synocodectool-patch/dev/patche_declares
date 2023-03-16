@@ -14,6 +14,7 @@ declare -A binhash_pattern_list=(
     ["796ac7fab2dcad7978a0e8ae48abc9150aba916c"]='74CD4889EFE8........84C074404C8D\n......4C89EFE8........84C0746348' \
     ["22445f5b0d8b6714954b50930c47b8805cf32b98"]='E7E8........84C07440488DAC24....\n......4C89EFE8........84C0746348' \
     ["18461b62813166652fd64a96e06237fde81925f7"]='E7E8........84C07443488DAC24....\n......4C89EFE8........84C0746348'
+    #["fffffffffffffffffffffffffffffffffffffffe"]='E8........84C07....88DAC24......\n......4C89EFE8........84C0746348'
 )
 declare -a path_list=(
     "/usr/syno/bin" \
